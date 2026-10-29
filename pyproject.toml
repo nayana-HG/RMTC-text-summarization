@@ -1,0 +1,52 @@
+[project]
+name = "rmtc-text-summarization"
+version = "0.1.0"
+description = "Hybrid extractive + abstractive text summarization with multilingual (Indic) output, served as a Flask web app."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    # Web app and configuration
+    "flask>=3.0",
+    "python-dotenv>=1.0",
+    # Summarization core (lightweight mode)
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "nltk>=3.8",
+    "langdetect>=1.0.9",
+    # Document input
+    "pypdf>=4.0",
+    "python-docx>=1.1",
+    "pillow>=10.0",
+    "pytesseract>=0.3.10", # also needs the Tesseract binary, see README
+    # Export
+    "reportlab>=4.1",
+    "uharfbuzz>=0.39", # correct shaping of Indic scripts in PDF export
+    # Online services (can be disabled in .env)
+    "deep-translator>=1.11", # Google Translate fallback
+    "gtts>=2.5", # /api/tts speech synthesis
+]
+
+[project.optional-dependencies]
+# Neural models: BART summarizer, MiniLM embeddings, Marian / mBART / NLLB translation.
+# Install with: uv sync --extra ml   (several GB including models downloaded on first use)
+ml = [
+    "torch>=2.1",
+    "transformers>=4.40",
+    "sentence-transformers>=2.6",
+    "sentencepiece>=0.2",
+    "sacremoses>=0.1",
+    "protobuf>=4.25",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pyflakes>=3.2",
+]
+
+[tool.uv]
+# This is an application, not an installable library.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["test_app.py"]

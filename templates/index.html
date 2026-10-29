@@ -8,7 +8,7 @@
     <link
       rel="stylesheet"
       href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-      integrity="sha384-Gn5384xqQ1aok/XA+B58RXPxPg6fy4IwvTNh@E263XmFc315Aw1GgFAW/dA1563Xm"
+      integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
       crossorigin="anonymous"
     />
 
@@ -49,20 +49,18 @@
             <div class="form-group mt-2">
               <label for="language" style="font-weight: bold;">Select Output Language:</label>
               <select name="language" id="language" class="form-control" style="font-weight: bold; border: 2px solid #333; border-radius: 6px;">
-                <option value="kn" selected>Kannada (ಕನ್ನಡ)</option>
-                <option value="en">English</option>
-                <option value="hi">Hindi (हिंदी)</option>
-                <option value="bn">Bengali (বাংলা)</option>
-                <option value="ta">Tamil (தமிழ்)</option>
-                <option value="te">Telugu (తెలుగు)</option>
-                <option value="ml">Malayalam (മലയാളം)</option>
-                <option value="mr">Marathi (मराठी)</option>
-                <option value="gu">Gujarati (ગુજરાતી)</option>
-                <option value="pa">Punjabi (ਪੰਜਾਬੀ)</option>
-                <option value="ur">Urdu (اردو)</option>
-                <option value="es">Spanish (Español)</option>
-                <option value="fr">French (Français)</option>
-                <option value="de">German (Deutsch)</option>
+                {% for code, name in languages.items() %}
+                <option value="{{ code }}" {% if code == default_language %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group mt-2">
+              <label for="summary_mode" style="font-weight: bold;">Summary Style:</label>
+              <select name="summary_mode" id="summary_mode" class="form-control" style="font-weight: bold; border: 2px solid #333; border-radius: 6px;">
+                {% for code, name in modes.items() %}
+                <option value="{{ code }}" {% if code == default_mode %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
               </select>
             </div>
 
@@ -81,17 +79,17 @@
     </div>
     <script
       src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
-      integrity="sha384-KJ302DKtIkVVIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+      integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
       crossorigin="anonymous"
     ></script>
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
-      integrity="sha384-Aplibgh9B+Y1QKtv3Rn7w3mgPxhU9K/ScQsAP7hU1bX39J7fakFPskvXusvfa@b4Q"
+      integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
       crossorigin="anonymous"
     ></script>
     <script
       src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
-      integrity="sha384-3ZR65pejh4U@2d8j0t6vLEHfe/3QG1RRSQQxSfFwp11MquVdAyjuar5+76PVCmY1"
+      integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
       crossorigin="anonymous"
     ></script>
   </body>

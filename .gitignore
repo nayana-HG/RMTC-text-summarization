@@ -5,4 +5,10 @@ __pycache__/
 *.py[cod]
 .env
 .env.*
+!.env.example
 glove.6B.*.txt
+
+# Test / tool output
+.pytest_cache/
+.coverage
+htmlcov/

@@ -8,14 +8,14 @@
   <link
     rel="stylesheet"
     href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-    integrity="sha384-Gn5384xqQ1aok/XA+B58RXPxPg6fy4IwvTNh@E263XmFc315Aw1GgFAW/dA1563Xm"
+    integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
     crossorigin="anonymous"
   />
   <link rel="stylesheet" href="static/styles.css" />
   <script>
     let speech = null;
     let isPaused = false;
-    let targetLang = "{{ language | default('kn') }}";
+    let targetLang = {{ (language or 'en') | tojson }};
     let activePlayBtn = null;
 
     const SPEECH_LANG_MAP = {
@@ -140,7 +140,9 @@
       <div class="ts">
         <h1>Text Summarization</h1>
         <p class="tag">Retrieve separate summaries for each input document</p>
-        <p class="mode-tag">Mode: {{ summary_mode | default('detailed') }} | Language: {{ language_name | default('Kannada') }}</p>
+        {% if doc_results %}
+        <p class="mode-tag">Mode: {{ summary_mode }} | Language: {{ language_name }}</p>
+        {% endif %}
       </div>
 
       <div class="container-fluid" style="padding-left: 30px; padding-right: 30px;">
@@ -149,9 +151,15 @@
           <div class="alert alert-danger" role="alert">
             {{ error }}
           </div>
+          <a href="/index" class="btn btn-primary">&larr; Back to input</a>
         {% endif %}
 
-        {% set docs_list = doc_results if doc_results else [{'doc_name': 'Document Output', 'original_text': original_text, 'summary': summary, 'keywords': keywords, 'explanation': explanation}] %}
+        {% for message in errors or [] %}
+          <div class="alert alert-warning" role="alert">{{ message }}</div>
+        {% endfor %}
+
+        {% set docs_list = doc_results or [] %}
+        <script id="doc-data" type="application/json">{{ docs_list | tojson }}</script>
 
         {% for item in docs_list %}
           <div class="doc-card-block mb-5 p-4 rounded bg-white shadow-sm" style="border: 2px solid #117a65;">
@@ -163,6 +171,10 @@
               </h4>
               <span class="badge badge-info p-2" style="font-size: 0.9rem;">Document {{ loop.index }} of {{ docs_list | length }}</span>
             </div>
+
+            {% for warning in item.warnings %}
+              <div class="alert alert-warning py-2" role="alert">{{ warning }}</div>
+            {% endfor %}
 
             <!-- Subheaders matching screenshot -->
             <div class="row align-items-center mb-3">
@@ -194,15 +206,15 @@
 
             <!-- Dedicated Action Buttons for this specific document -->
             <div class="text-center my-4">
-              <button class="btn btn-success mx-1 font-weight-bold" onclick="downloadTXT({{ loop.index0 }}, '{{ item.doc_name }}')">Export as TXT</button>
-              <button class="btn btn-primary mx-1 font-weight-bold" onclick="downloadWord({{ loop.index0 }}, '{{ item.doc_name }}')">Export as Word</button>
-              <button class="btn btn-info mx-1 font-weight-bold" onclick="downloadPDF({{ loop.index0 }}, '{{ item.doc_name }}')">Export as PDF</button>
+              <button class="btn btn-success mx-1 font-weight-bold" onclick="downloadTXT({{ loop.index0 }})">Export as TXT</button>
+              <button class="btn btn-primary mx-1 font-weight-bold" onclick="downloadWord({{ loop.index0 }})">Export as Word</button>
+              <button class="btn btn-info mx-1 font-weight-bold" onclick="downloadPDF({{ loop.index0 }})">Export as PDF</button>
               <button class="btn btn-warning mx-1 font-weight-bold" onclick="copyToClipboard({{ loop.index0 }})">Copy to Clipboard</button>
             </div>
 
             {% if item.keywords %}
               <div class="my-3 p-3 bg-light rounded border">
-                <h6 class="font-weight-bold">Extracted Keywords:</h6>
+                <h6 class="font-weight-bold">Extracted Keywords{% if item.keywords_language == 'en' and language != 'en' %} (English){% endif %}:</h6>
                 <p class="mb-0 text-primary font-weight-bold">{{ item.keywords | join(', ') }}</p>
               </div>
             {% endif %}
@@ -222,6 +234,9 @@
   </div>
 
   <script>
+    const DOCS = JSON.parse(document.getElementById('doc-data').textContent);
+    const LANGUAGE_NAME = {{ (language_name or 'Output') | tojson }};
+
     function getUniqueFilename(ext, docName = 'doc') {
       const safeName = docName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
       const now = new Date();
@@ -234,116 +249,83 @@
       return `${safeName}_summary_${dateStr}.${ext}`;
     }
 
-    function downloadTXT(idx = 0, docName = 'doc') {
-      const summaryEls = document.querySelectorAll('.summaryTxt');
-      const summary = (summaryEls[idx] || summaryEls[0]).textContent;
-      const blob = new Blob([summary], { type: 'text/plain;charset=utf-8' });
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function saveBlob(blob, filename) {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = getUniqueFilename('txt', docName);
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
 
-    async function downloadWord(idx = 0, docName = 'doc') {
-      const summaryEls = document.querySelectorAll('.summaryTxt');
-      const origEls = document.querySelectorAll('.orignaltxt');
+    function exportPayload(doc) {
+      return {
+        summary: doc.summary,
+        original_text: doc.original_text,
+        language_name: LANGUAGE_NAME,
+        keywords: doc.keywords || [],
+        explanation: doc.explanation || ''
+      };
+    }
 
-      const summary = (summaryEls[idx] || summaryEls[0]).textContent;
-      const originalText = (origEls[idx] || origEls[0]) ? (origEls[idx] || origEls[0]).textContent : "";
+    async function requestExport(url, doc) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(exportPayload(doc))
+      });
+      if (!response.ok) {
+        let message = `Export failed (HTTP ${response.status})`;
+        try { message = (await response.json()).message || message; } catch (e) {}
+        throw new Error(message);
+      }
+      return response.blob();
+    }
 
+    function downloadTXT(idx = 0) {
+      const doc = DOCS[idx];
+      saveBlob(new Blob([doc.summary], { type: 'text/plain;charset=utf-8' }),
+               getUniqueFilename('txt', doc.doc_name));
+    }
+
+    async function downloadWord(idx = 0) {
+      const doc = DOCS[idx];
       try {
-        const response = await fetch('/api/download/docx', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            summary: summary,
-            original_text: originalText,
-            language_name: "{{ language_name | default('Output') }}",
-            keywords: [],
-            explanation: ""
-          })
-        });
-
-        if (!response.ok) throw new Error("DOCX generation failed");
-
-        const blob = await response.blob();
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = getUniqueFilename('docx', docName);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        saveBlob(await requestExport('/api/download/docx', doc), getUniqueFilename('docx', doc.doc_name));
       } catch (err) {
-        const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body>";
-        const footer = "</body></html>";
-        const sourceHTML = header + '<h2>Summary Result - ' + docName + '</h2><p>' + summary.replace(/\n/g, '<br>') + '</p>' + footer;
-        const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = getUniqueFilename('doc', docName);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Fallback: an HTML document that Word opens as .doc.
+        console.warn('DOCX export failed, using HTML fallback:', err);
+        const sourceHTML = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body>" +
+          '<h2>Summary Result - ' + escapeHtml(doc.doc_name) + '</h2><p>' +
+          escapeHtml(doc.summary).replace(/\n/g, '<br>') + '</p></body></html>';
+        saveBlob(new Blob(['\ufeff', sourceHTML], { type: 'application/msword' }),
+                 getUniqueFilename('doc', doc.doc_name));
       }
     }
 
-    async function downloadPDF(idx = 0, docName = 'doc') {
-      const summaryEls = document.querySelectorAll('.summaryTxt');
-      const origEls = document.querySelectorAll('.orignaltxt');
-
-      const summary = (summaryEls[idx] || summaryEls[0]).textContent;
-      const originalText = (origEls[idx] || origEls[0]) ? (origEls[idx] || origEls[0]).textContent : "";
-
+    async function downloadPDF(idx = 0) {
+      const doc = DOCS[idx];
       try {
-        const response = await fetch('/api/download/pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            summary: summary,
-            original_text: originalText,
-            language_name: "{{ language_name | default('Output') }}",
-            keywords: [],
-            explanation: ""
-          })
-        });
-
-        if (!response.ok) throw new Error("PDF generation failed");
-
-        const blob = await response.blob();
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = getUniqueFilename('pdf', docName);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        saveBlob(await requestExport('/api/download/pdf', doc), getUniqueFilename('pdf', doc.doc_name));
       } catch (err) {
-        if (typeof window.jspdf !== 'undefined' || typeof window.jsPDF !== 'undefined') {
-          const doc = new (window.jspdf || window.jsPDF)();
-          doc.setFontSize(14);
-          doc.text('Summary Output - ' + docName, 10, 10);
-          doc.setFontSize(11);
-          const splitText = doc.splitTextToSize(summary, 180);
-          doc.text(splitText, 10, 20);
-          doc.save(getUniqueFilename('pdf', docName));
-        } else {
-          alert('PDF generation error: ' + err.message);
-        }
+        alert('PDF export failed: ' + err.message + '\nTry "Export as Word" instead.');
       }
     }
 
     function copyToClipboard(idx = 0) {
-      const summaryEls = document.querySelectorAll('.summaryTxt');
-      const summary = (summaryEls[idx] || summaryEls[0]).textContent;
-      navigator.clipboard.writeText(summary).then(function() {
+      navigator.clipboard.writeText(DOCS[idx].summary).then(function() {
         alert('Summary copied to clipboard!');
       }, function(err) {
         alert('Failed to copy: ' + err);
       });
     }
   </script>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </body>
 </html>
